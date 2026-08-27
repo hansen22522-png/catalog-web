@@ -69,9 +69,9 @@
       </button>
       <label class="flex items-center gap-1.5 text-sm cursor-pointer bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200" title="本地编辑（不会写回飞书）">
         <input type="checkbox" id="editModeToggle" class="rounded"/>
-        <span><i class="fa fa-pencil"></i> 本地编辑</span>
+        <span><i class="fa fa-pencil"></i> 编辑模式</span>
       </label>
-      <button id="addBtn" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 hidden" title="新增产品（仅本地）">
+      <button id="addBtn" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 hidden" title="新增产品（同步到飞书）">
         <i class="fa fa-plus"></i> 新增
       </button>
       <button id="cartBtn" class="relative bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-700">
@@ -255,8 +255,8 @@
           </div>
         </div>
       </div>
-      <div class="mt-3 text-xs text-amber-600 bg-amber-50 p-2 rounded">
-        <i class="fa fa-info-circle"></i> 本地编辑仅保存在当前浏览器，不会写回飞书。如需永久修改请在飞书多维表格中操作。
+      <div class="mt-3 text-xs text-blue-600 bg-blue-50 p-2 rounded">
+        <i class="fa fa-info-circle"></i> 修改将直接同步到飞书多维表格。本地拖拽上传的图片暂不同步（请在飞书中粘贴图片URL）。
       </div>
     </div>
     <div class="px-5 pb-5 flex justify-between items-center sticky bottom-0 bg-white border-t pt-4">
@@ -534,7 +534,7 @@ function closeDetail(){ $('#detailMask').classList.add('hidden'); state.detailIt
 function openEdit(idx){
   state.editIndex = idx;
   const isNew = idx < 0;
-  $('#editTitle').textContent = isNew ? '新增产品（本地）' : '编辑产品（本地）';
+  $('#editTitle').textContent = isNew ? '新增产品' : '编辑产品';
   $('#deleteInEditBtn').classList.toggle('hidden', isNew);
   const d = isNew ? {cat1:'',cat2:'',name:'',enName:'',material:'',capacity:'',print:'',cost:'',sku:'',weightKg:'',remark:'',img:''} : rawData[idx];
   state.editImg = d.img || '';
@@ -581,7 +581,7 @@ function handleFile(file){
   reader.readAsDataURL(file);
 }
 
-function saveEdit(){
+async function saveEdit(){
   const name = $('#f_name').value.trim();
   const cat1 = $('#f_cat1').value.trim();
   const cat2 = $('#f_cat2').value.trim();
@@ -602,27 +602,59 @@ function saveEdit(){
     remark: $('#f_remark').value.trim(),
     img: state.editImg
   };
-  if(state.editIndex >= 0){
-    rawData[state.editIndex] = item;
-    showToast('已保存（本地）');
-  }else{
-    rawData.push(item);
-    showToast('已新增（本地）');
+  const saveBtn = $('#saveEditBtn');
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 保存中...';
+  try{
+    const isNew = state.editIndex < 0;
+    const recordId = isNew ? '' : (rawData[state.editIndex]?.record_id || '');
+    // base64 本地图片不同步到飞书
+    const payload = {...item};
+    if(payload.img && payload.img.startsWith('data:image')){
+      delete payload.img;
+    }
+    let url, method;
+    if(isNew){
+      url = API_BASE + '/api/records';
+      method = 'POST';
+    }else{
+      url = API_BASE + '/api/records/' + recordId;
+      method = 'PUT';
+    }
+    const resp = await fetch(url, {
+      method,
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error);
+    showToast(isNew ? '已新增并同步到飞书' : '已保存并同步到飞书');
+    closeEdit();
+    await syncFromFeishu();
+  }catch(err){
+    showToast('保存失败：' + err.message);
+  }finally{
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '<i class="fa fa-save"></i> 保存';
   }
-  saveData();
-  renderFilterOptions();
-  renderList();
-  closeEdit();
 }
 
-function deleteItem(idx){
-  if(idx<0||idx>=rawData.length) return;
-  if(!confirm(`确定删除「${rawData[idx].name}」吗？（仅本地）`)) return;
-  rawData.splice(idx,1);
-  saveData();
-  renderFilterOptions();
-  renderList();
-  showToast('已删除（本地）');
+async function deleteItem(idx){
+  if(idx<0||idx>=rawData.length) return false;
+  const item = rawData[idx];
+  if(!confirm(`确定删除「${item.name}」吗？将同步删除飞书表格中的数据。`)) return false;
+  try{
+    const recordId = item.record_id || '';
+    const resp = await fetch(API_BASE + '/api/records/' + recordId, {method: 'DELETE'});
+    const data = await resp.json();
+    if(data.error) throw new Error(data.error);
+    showToast('已删除并同步到飞书');
+    await syncFromFeishu();
+    return true;
+  }catch(err){
+    showToast('删除失败：' + err.message);
+    return false;
+  }
 }
 
 // ==================== 购物车 ====================
@@ -753,8 +785,11 @@ function bindEvents(){
   $('#cancelEditBtn').addEventListener('click',closeEdit);
   $('#editMask').addEventListener('click',e=>{if(e.target===$('#editMask'))closeEdit()});
   $('#saveEditBtn').addEventListener('click',saveEdit);
-  $('#deleteInEditBtn').addEventListener('click',()=>{
-    if(state.editIndex>=0){ deleteItem(state.editIndex); closeEdit(); }
+  $('#deleteInEditBtn').addEventListener('click', async ()=>{
+    if(state.editIndex>=0){
+      const ok = await deleteItem(state.editIndex);
+      if(ok) closeEdit();
+    }
   });
   $('#removeImgBtn').addEventListener('click',()=>{state.editImg='';updateEditImgPreview();});
   $('#editImgInput').addEventListener('change',e=>{
