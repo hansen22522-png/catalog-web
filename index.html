@@ -136,8 +136,8 @@
       <div class="flex justify-between items-center mb-4">
         <div class="text-sm text-slate-500">共 <span id="resultCount">0</span> 条子件</div>
         <div class="flex gap-2">
-          <button data-view="grid" class="viewBtn px-3 py-1 border rounded bg-primary text-white"><i class="fa fa-th"></i> 网格</button>
-          <button data-view="list" class="viewBtn px-3 py-1 border rounded bg-white"><i class="fa fa-list"></i> 列表</button>
+          <button data-view="grid" class="viewBtn px-3 py-1 border rounded bg-primary text-white border-primary"><i class="fa fa-th"></i> 网格</button>
+          <button data-view="list" class="viewBtn px-3 py-1 border rounded bg-white text-slate-500 border-slate-200"><i class="fa fa-list"></i> 列表</button>
         </div>
       </div>
       <div id="cardContainer"></div>
@@ -455,7 +455,7 @@ function cardGridTpl(d){
   const editBtns = state.editMode ? `
     <div class="flex gap-1 mt-2">
       <button data-idx="${idx}" class="editItemBtn flex-1 border border-amber-400 text-amber-600 py-1 rounded text-xs hover:bg-amber-50"><i class="fa fa-pencil"></i> 编辑</button>
-      <button data-idx="${idx}" class="delItemBtn border border-red-400 text-red-500 py-1 px-2 rounded text-xs hover:bg-red-50"><i class="fa fa-trash"></i></button>
+      <button data-idx="${idx}" class="delItemBtn border border-red-400 text-red-500 py-1 px-2 rounded text-xs hover:bg-red-50"><i class="fa fa-trash"></i> 删除</button>
     </div>` : '';
   return `
   <div class="bg-white rounded-lg shadow overflow-hidden card-hover">
@@ -483,8 +483,8 @@ function cardGridTpl(d){
 function cardListTpl(d){
   const idx = rawData.indexOf(d);
   const editBtns = state.editMode ? `
-    <button data-idx="${idx}" class="editItemBtn border border-amber-400 text-amber-600 py-1 px-2 rounded text-xs hover:bg-amber-50"><i class="fa fa-pencil"></i></button>
-    <button data-idx="${idx}" class="delItemBtn border border-red-400 text-red-500 py-1 px-2 rounded text-xs hover:bg-red-50"><i class="fa fa-trash"></i></button>` : '';
+    <button data-idx="${idx}" class="editItemBtn border border-amber-400 text-amber-600 py-1 px-2 rounded text-xs hover:bg-amber-50"><i class="fa fa-pencil"></i> 编辑</button>
+    <button data-idx="${idx}" class="delItemBtn border border-red-400 text-red-500 py-1 px-2 rounded text-xs hover:bg-red-50"><i class="fa fa-trash"></i> 删除</button>` : '';
   return `
   <div class="bg-white rounded-lg shadow p-3 flex gap-3 items-center card-hover">
     <div class="w-20 h-20 bg-slate-50 shrink-0 flex items-center justify-center relative overflow-hidden rounded">
@@ -713,12 +713,15 @@ function exportCartCsv(){
 
 // ==================== 事件绑定 ====================
 function bindEvents(){
-  $('#searchInput').addEventListener('input',e=>{ state.search=e.target.value; renderList(); });
-  $$('.viewBtn').forEach(btn=>{
+$$('.viewBtn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       state.viewMode = btn.dataset.view;
-      $$('.viewBtn').forEach(b=>{ b.classList.remove('bg-primary','text-white'); b.classList.add('bg-white'); });
-      btn.classList.add('bg-primary','text-white');
+      $$('.viewBtn').forEach(b=>{
+        b.classList.remove('bg-primary','text-white','border-primary');
+        b.classList.add('bg-white','text-slate-500','border-slate-200');
+      });
+      btn.classList.remove('bg-white','text-slate-500','border-slate-200');
+      btn.classList.add('bg-primary','text-white','border-primary');
       renderList();
     });
   });
